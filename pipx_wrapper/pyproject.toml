@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pipx_wrapper"
+version = "1"
+authors = [
+    {name = "Matthieu Darbois", email = "mayeut@users.noreply.github.com"},
+]
+description = "pipx wrapper for setup-pipx"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+classifiers = [
+    "Programming Language :: Python :: 3",
+]
+
+[project.scripts]
+pipx = "pipx_wrapper.__main__:main"

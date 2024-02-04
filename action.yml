@@ -1,0 +1,48 @@
+name: setup-pipx
+description: 'Installs pipx'
+inputs:
+  python-version:
+    description: "Version range or exact version of Python or PyPy to use, using SemVer's version range syntax."
+    required: false
+    default: "3.8 - 3.12"
+  add-pipx-bin-dir-to-path:
+    description: "pipx bin dir will be added to PATH."
+    required: false
+    default: "true"
+  add-pipx-to-path:
+    description: "pipx will be added to PATH."
+    required: false
+    default: "true"
+outputs:
+  python-path:
+    description: "The absolute path to the Python or PyPy executable."
+    value: ${{ steps.python.outputs.python-path }}
+  pipx-path:
+    description: "The absolute path to the pipx executable."
+    value: ${{ steps.pipx.outputs.pipx-path }}
+  pipx-bin-dir:
+    description: "The absolute path to the pipx bin dir."
+    value: ${{ steps.pipx.outputs.pipx-bin-dir }}
+branding:
+  icon: package
+  color: yellow
+
+runs:
+  using: composite
+  steps:
+    # Set up a non-EOL, pipx supported Python version
+    - uses: actions/setup-python@v5
+      id: python
+      with:
+        python-version: ${{ inputs.python-version }}
+        update-environment: false
+
+    - id: pipx
+      run: >
+        '${{ steps.python.outputs.python-path }}'
+        -sSE
+        '${{ github.action_path }}/setup_pipx.py'
+        '${{ inputs.add-pipx-bin-dir-to-path }}'
+        '${{ inputs.add-pipx-to-path }}'
+        '${{ runner.temp }}/setup-pipx-${{ github.action_ref }}-${{ steps.python.outputs.python-version }}'
+      shell: bash
