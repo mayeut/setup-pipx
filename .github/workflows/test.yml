@@ -1,0 +1,148 @@
+name: Test
+
+on:
+  push:
+    #branches:
+    #  - main
+  pull_request:
+  workflow_dispatch:
+    # allow manual runs on branches without a PR
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pytest:
+    name: pytest on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: wntrblm/nox@2023.04.22
+        with:
+          python-versions: "3.8, 3.9, 3.10, 3.11, 3.12"
+      - run: nox -s tests
+
+  action_default:
+    name: action (default) on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-20.04, ubuntu-22.04, windows-2019, windows-2022, macos-11, macos-12, macos-13, macos-14]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pipx
+        uses: ./
+      - name: Run test
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          which pipx
+          pipx --version
+          pipx run cowsay -t foo
+          pipx install cowsay
+          cowsay -t foo
+        shell: pwsh
+
+  action_param:
+    name: action (${{ matrix.python }}, ${{ matrix.pipx_path }}, ${{ matrix.bin_path }}) on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-20.04, ubuntu-22.04, windows-2019, windows-2022, macos-11, macos-12, macos-13, macos-14]
+        python: ["3.8", "3.12"]
+        pipx_path: [true, false]
+        bin_path: [true, false]
+        pipx: ["1.4.3"]
+        exclude:
+        - os: macos-14
+          python: "3.8"  # c.f. https://github.com/actions/setup-python/issues/808
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pipx
+        id: pipx
+        uses: ./
+        with:
+          python-version: "${{ matrix.python }}"
+          add-pipx-to-path: ${{ matrix.pipx_path }}
+          add-pipx-bin-dir-to-path: ${{ matrix.bin_path }}
+      - name: Environment
+        run: printenv | sort
+        shell: bash
+      - name: Run test
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          $pythonVersion = & "${{ steps.pipx.outputs.python-path }}" -V
+          if ("$pythonVersion" -notlike "Python ${{ matrix.python }}.*"){
+            Write-Host "The current python version is $pythonVersion; expected version is ${{ matrix.python }}"
+            exit 1
+          }
+          $pipxVersion = & "${{ steps.pipx.outputs.pipx-path }}" --version
+          if ("${{ matrix.pipx }}" -ne "$pipxVersion"){
+            Write-Host "The current pipx version is $pipxVersion; expected version is ${{ matrix.pipx }}"
+            exit 1
+          }
+          & "${{ steps.pipx.outputs.pipx-path }}" run cowsay -t foo
+          & "${{ steps.pipx.outputs.pipx-path }}" install cowsay
+          & "${{ steps.pipx.outputs.pipx-bin-dir }}/cowsay" -t foo
+        shell: pwsh
+
+      - name: Check pipx in PATH
+        if: ${{ matrix.pipx_path }}
+        run: |
+          $current = ""
+          try {
+            $current = (Get-Command "pipx").Path
+          } catch { }
+          $expected = "${{ steps.pipx.outputs.pipx-path }}"
+          if ($current -ne $expected) {
+            Write-Host "The current pipx in PATH is '$current'; expected is '$expected'"
+            exit 1
+          }
+        shell: pwsh
+
+      - name: Check pipx not in PATH
+        if: ${{ ! matrix.pipx_path }}
+        run: |
+          $current = ""
+          try {
+            $current = (Get-Command "pipx").Path
+          } catch { }
+          $expected = "${{ steps.pipx.outputs.pipx-path }}"
+          if ($current -eq $expected) {
+            Write-Host "pipx shall not be in PATH: '$current'"
+            exit 1
+          }
+        shell: pwsh
+
+      - name: Check cowsay in PATH
+        if: ${{ matrix.bin_path }}
+        run: |
+          $current = ""
+          try {
+            $current = (Get-Command "cowsay").Path
+          } catch { }
+          $expected = (Get-ChildItem -Filter cowsay* "${{ steps.pipx.outputs.pipx-bin-dir }}")[0].FullName
+          if ($current -ne $expected) {
+            Write-Host "The current cowsay in PATH is '$current'; expected is '$expected'"
+            exit 1
+          }
+        shell: pwsh
+
+      - name: Check cowsay not in PATH
+        if: ${{ ! matrix.bin_path }}
+        run: |
+          $current = ""
+          try {
+            $current = (Get-Command "cowsay").Path
+          } catch { }
+          $expected = (Get-ChildItem -Filter cowsay* "${{ steps.pipx.outputs.pipx-bin-dir }}")[0].FullName
+          if ($current -eq $expected) {
+            Write-Host "cowsay shall not be in PATH: '$current'"
+            exit 1
+          }
+        shell: pwsh
